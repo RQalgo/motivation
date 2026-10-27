@@ -26,16 +26,19 @@
     </div>
 
     <header class="topbar">
-      <button class="pill" id="openWall" aria-label="Open your favorites wall">
+      <button class="icon-btn" id="openWall" aria-label="Open your favourites wall">
         <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="7" height="7" rx="1.2"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.2"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.2"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.2"/></svg>
-        <span>Favorites</span>
-        <span class="count" id="favCount">0</span>
       </button>
-      <button class="icon-btn" id="musicBtn" aria-pressed="false" aria-label="Play focus music">
-        <svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 14v-2a9 9 0 0 1 18 0v2"/><path d="M21 15a2 2 0 0 1-2 2h-1v-6h1a2 2 0 0 1 2 2zM3 15a2 2 0 0 0 2 2h1v-6H5a2 2 0 0 0-2 2z"/></svg>
-        <svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14"/></svg>
-        <span class="eq" aria-hidden="true"><i></i><i></i><i></i></span>
-      </button>
+      <div class="top-right">
+        <button class="icon-btn" id="dailyBtn" aria-pressed="false" aria-label="Turn on quote of the day" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+        </button>
+        <button class="icon-btn" id="musicBtn" aria-pressed="false" aria-label="Play focus music">
+          <svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 14v-2a9 9 0 0 1 18 0v2"/><path d="M21 15a2 2 0 0 1-2 2h-1v-6h1a2 2 0 0 1 2 2zM3 15a2 2 0 0 0 2 2h1v-6H5a2 2 0 0 0-2 2z"/></svg>
+          <svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14"/></svg>
+          <span class="eq" aria-hidden="true"><i></i><i></i><i></i></span>
+        </button>
+      </div>
     </header>
 
     <button class="nav nav-prev" id="prevBtn" aria-label="Previous quote">
@@ -61,35 +64,36 @@
         <button class="act" id="likeBtn" aria-pressed="false" aria-label="Show more quotes like this">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10v12"/><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z"/></svg>
         </button>
-        <button class="act act-fav" id="favBtn" aria-pressed="false" aria-label="Add to favorites">
+        <button class="act act-fav" id="favBtn" aria-pressed="false" aria-label="Add to favourites">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.2l2.7 5.5 6 .9-4.4 4.2 1 6-5.3-2.8-5.3 2.8 1-6L3.3 9.6l6-.9z"/></svg>
         </button>
       </div>
-      <span class="hint" id="hint">Swipe up for the next quote</span>
+      <span class="hint" id="hint">Swipe up for the next quote. Double-tap to save it.</span>
     </footer>
 
     <div class="toast" id="toast" role="status"></div>
   </main>
 
-  <section class="wall" id="wall" aria-hidden="true" aria-label="Favorites wall">
+  <section class="wall" id="wall" aria-hidden="true" aria-label="Favourites wall">
     <header class="wall-head">
       <div>
         <h2>Your wall</h2>
         <p id="wallSub">Quotes you starred, pinned in the order you found them.</p>
       </div>
-      <button class="icon-btn dark" id="closeWall" aria-label="Close favorites wall">
+      <button class="icon-btn dark" id="closeWall" aria-label="Close favourites wall">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
       </button>
     </header>
     <div class="board" id="board"></div>
     <div class="empty" id="wallEmpty">
       <p>Nothing pinned yet.</p>
-      <p>Tap the star on any quote and it will land here.</p>
+      <p>Double-tap a quote, or tap its star, and it will land here.</p>
     </div>
   </section>
 
   <script src="js/quotes.js"></script>
   <script src="js/backgrounds.js"></script>
+  <script src="js/picker.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

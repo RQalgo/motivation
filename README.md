@@ -7,7 +7,9 @@ A calm, full-screen motivational quote app for desktop and mobile. Plain HTML/CS
 - Focus music: a 74-second cycle of the 40 Hz gamma binaural track, looped gaplessly (0.9 MB, loads only when you press play)
 - Next/previous: arrow buttons, keyboard arrows, mouse wheel, or swipe up/down on phones
 - Like / dislike: tunes which themes and authors you see next (disliked quotes never return)
-- Favorites wall: starred quotes pinned as notes on a felt board; tap a note to reopen it
+- Favourites wall: starred quotes pinned as notes on a felt board; tap a note to reopen it
+- Double-tap (or double-click) a quote to favourite it; double-tap again to remove it
+- Quote of the day: the installed app on Chrome/Edge (Android, Windows, macOS) can send one daily notification, picked from your likes
 - Installable as an app (PWA); preferences and favorites stay in your browser
 
 Keyboard: ← → next/previous, L like, D dislike, F favorite, M music.

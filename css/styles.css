@@ -85,16 +85,9 @@ svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width:
   font-size: 15px; font-weight: 500; letter-spacing: 0.01em;
 }
 .pill svg { width: 18px; height: 18px; }
-.count {
-  min-width: 28px; height: 28px; padding: 0 8px;
-  display: inline-grid; place-items: center;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.9); color: var(--felt);
-  font-size: 13px; font-weight: 650;
-}
-.count.bump { animation: bump 0.45s ease; }
-@keyframes bump { 40% { transform: scale(1.3); } }
 
+.top-right { display: flex; gap: 10px; }
+.icon-btn[hidden] { display: none; }
 .icon-btn {
   width: 44px; height: 44px; border-radius: 50%;
   display: grid; place-items: center; position: relative;
@@ -125,6 +118,7 @@ svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width:
   min-height: 0;
 }
 .quote { margin: 0; max-width: min(100%, 1180px); transition: opacity 0.45s ease, transform 0.45s cubic-bezier(.2,.7,.2,1); }
+.quote { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 .quote blockquote {
   margin: 0;
   font-family: var(--font);
@@ -310,9 +304,29 @@ svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width:
   .note .by { font-size: 12px; margin-top: 10px; }
 }
 
-@media (max-width: 430px) {
-  #openWall span:not(.count) { display: none; }
-  #openWall { padding: 0 8px 0 14px; }
+/* ---------- Double-tap favourite flash ---------- */
+.fav-flash {
+  position: fixed; z-index: 6;
+  width: 128px; height: 128px; margin: -64px 0 0 -64px;
+  pointer-events: none;
+  color: var(--sun);
+  filter: drop-shadow(0 6px 22px rgba(0, 0, 0, 0.35));
+  animation: favIn 0.8s cubic-bezier(.2, .8, .2, 1) forwards;
+}
+.fav-flash svg { width: 100%; height: 100%; stroke-width: 1.1; }
+.fav-flash.add svg { fill: currentColor; }
+.fav-flash.remove { color: #fff; animation-name: favOut; }
+@keyframes favIn {
+  0% { opacity: 0; transform: scale(0.4); }
+  28% { opacity: 1; transform: scale(1.12); }
+  45% { transform: scale(0.96); }
+  70% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.04) translateY(-12px); }
+}
+@keyframes favOut {
+  0% { opacity: 0; transform: scale(1.15); }
+  25% { opacity: 0.95; transform: scale(1); }
+  100% { opacity: 0; transform: scale(0.45); }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -2,16 +2,11 @@
   "use strict";
 
   // ---------- Data ----------
-  const QUOTES = window.QUOTES.map((q) => ({ ...q, id: hash(q.t) }));
+  const P = window.StillpointPicker;
+  const QUOTES = window.QUOTES.map((q) => ({ ...q, id: P.hash(q.t) }));
   const BY_ID = new Map(QUOTES.map((q) => [q.id, q]));
   const BG = window.BACKGROUNDS.slice();
   const badBg = new Set();
-
-  function hash(str) {
-    let h = 2166136261;
-    for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
-    return (h >>> 0).toString(36);
-  }
 
   // ---------- Storage (best-effort) ----------
   const KEY = "stillpoint.v1";
@@ -27,13 +22,26 @@
   }
   function save() {
     try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* ignore */ }
+    mirrorPrefs();
+  }
+
+  // Mirror preferences to IndexedDB so the service worker can pick the daily quote.
+  let mirrorTimer = 0;
+  function mirrorPrefs(now) {
+    clearTimeout(mirrorTimer);
+    const write = () => P.kvSet("prefs", {
+      tags: state.tags, authors: state.authors, disliked: state.disliked,
+      seen: state.seen.slice(-300), favorites: state.favorites.map((f) => f.id),
+    }).catch(() => {});
+    if (now) return write();
+    mirrorTimer = setTimeout(write, 600);
   }
 
   // ---------- Preference model ----------
   // Each like nudges the quote's themes and author up; each dislike nudges them down.
   // Selection is weighted-random so new themes still appear (exploration).
-  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-  const authorKey = (a) => a.replace(/^(Attributed to|Often attributed to)\s+/i, "").split(/[,(]/)[0].trim();
+  const clamp = P.clamp;
+  const authorKey = P.authorKey;
 
   function adjust(q, delta) {
     q.g.forEach((tag) => { state.tags[tag] = clamp((state.tags[tag] || 0) + delta, -5, 5); });
@@ -41,26 +49,10 @@
     state.authors[ak] = clamp((state.authors[ak] || 0) + delta * 0.6, -3, 3);
   }
 
-  function weight(q, recent) {
-    if (state.disliked.includes(q.id)) return 0;
-    if (recent.has(q.id)) return 0;
-    const tagScore = q.g.reduce((s, t) => s + (state.tags[t] || 0), 0) / q.g.length;
-    const authorScore = state.authors[authorKey(q.a)] || 0;
-    let w = Math.exp(0.55 * tagScore + 0.35 * authorScore);
-    if (state.seen.includes(q.id)) w *= 0.25; // prefer unseen quotes
-    return Math.max(w, 0.04);
-  }
-
   function pickQuote() {
     const recentWindow = Math.min(40, Math.floor(QUOTES.length / 3));
     const recent = new Set(history.slice(-recentWindow).map((h) => h.id));
-    let pool = QUOTES.map((q) => [q, weight(q, recent)]).filter(([, w]) => w > 0);
-    if (!pool.length) pool = QUOTES.filter((q) => !state.disliked.includes(q.id)).map((q) => [q, 1]);
-    if (!pool.length) pool = QUOTES.map((q) => [q, 1]);
-    const total = pool.reduce((s, [, w]) => s + w, 0);
-    let r = Math.random() * total;
-    for (const [q, w] of pool) { if ((r -= w) <= 0) return q; }
-    return pool[pool.length - 1][0];
+    return P.pick(QUOTES, state, recent);
   }
 
   function pickBg() {
@@ -81,7 +73,7 @@
     bgA: $("bgA"), bgB: $("bgB"),
     prev: $("prevBtn"), next: $("nextBtn"),
     like: $("likeBtn"), dislike: $("dislikeBtn"), fav: $("favBtn"),
-    music: $("musicBtn"), favCount: $("favCount"), openWall: $("openWall"),
+    music: $("musicBtn"), openWall: $("openWall"), daily: $("dailyBtn"),
     wall: $("wall"), closeWall: $("closeWall"), board: $("board"), wallSub: $("wallSub"),
     toast: $("toast"), hint: $("hint"),
   };
@@ -190,9 +182,8 @@
     el.dislike.setAttribute("aria-pressed", state.disliked.includes(id));
     const isFav = state.favorites.some((f) => f.id === id);
     el.fav.setAttribute("aria-pressed", isFav);
-    el.fav.setAttribute("aria-label", isFav ? "Remove from favorites" : "Add to favorites");
+    el.fav.setAttribute("aria-label", isFav ? "Remove from favourites" : "Add to favourites");
     el.prev.disabled = pos <= 0;
-    el.favCount.textContent = state.favorites.length;
   }
 
   let animating = false;
@@ -287,19 +278,38 @@
     }
   }
 
-  function toggleFav() {
+  // Returns true if the quote is now a favourite. Favouriting also nudges its themes up a little.
+  function toggleFav(opts) {
     const q = current();
     pop(el.fav);
     const i = state.favorites.findIndex((f) => f.id === q.id);
-    if (i >= 0) {
-      state.favorites.splice(i, 1);
-      toast("Removed from your wall");
-    } else {
+    const added = i < 0;
+    if (added) {
       state.favorites.push({ id: q.id, at: Date.now() });
-      el.favCount.classList.remove("bump"); void el.favCount.offsetWidth; el.favCount.classList.add("bump");
-      toast("Pinned to your wall");
+      adjust(q, +0.5);
+    } else {
+      state.favorites.splice(i, 1);
+      adjust(q, -0.5);
     }
+    if (!(opts && opts.silent)) toast(added ? "Pinned to your wall" : "Removed from your wall");
     save(); syncButtons();
+    return added;
+  }
+
+  // Star that pops over the quote after a double-tap: filled = saved, outline fading = removed.
+  function flashStar(added) {
+    const r = el.quote.getBoundingClientRect();
+    const f = document.createElement("div");
+    f.className = "fav-flash " + (added ? "add" : "remove");
+    f.style.left = r.left + r.width / 2 + "px";
+    f.style.top = r.top + r.height / 2 + "px";
+    f.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.2l2.7 5.5 6 .9-4.4 4.2 1 6-5.3-2.8-5.3 2.8 1-6L3.3 9.6l6-.9z"/></svg>';
+    document.body.appendChild(f);
+    setTimeout(() => f.remove(), 900);
+  }
+  function doubleTapFav() {
+    if (el.wall.classList.contains("open")) return;
+    flashStar(toggleFav({ silent: true }));
   }
 
   // ---------- Favorites wall ----------
@@ -321,7 +331,7 @@
       note.setAttribute("role", "button");
       note.setAttribute("aria-label", `Open quote: ${q.t}`);
       note.innerHTML = `<p></p><span class="by"></span>
-        <button class="unpin" aria-label="Remove from favorites"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>`;
+        <button class="unpin" aria-label="Remove from favourites"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>`;
       note.querySelector("p").textContent = q.t;
       note.querySelector(".by").textContent = q.a;
       note.addEventListener("click", (e) => {
@@ -352,13 +362,17 @@
     el.wall.setAttribute("aria-hidden", "true");
     el.openWall.focus();
   }
-  function openFromWall(id) {
-    // insert the chosen quote right after the current one and move to it
+  // insert a chosen quote right after the current one and move to it
+  function jumpTo(id) {
+    if (!BY_ID.has(id)) return;
     if (pending && history[history.length - 1] === pending) history.pop();
     history.splice(pos + 1, 0, { id, bg: pickBg() });
-    closeWall();
     animating = false;
     go(1);
+  }
+  function openFromWall(id) {
+    closeWall();
+    jumpTo(id);
   }
 
   // ---------- Music ----------
@@ -473,6 +487,7 @@
 
   // Vertical swipe on touch: up = next, down = previous
   let touchStart = null;
+  let lastTap = null, lastTouchAt = 0;
   el.stage.addEventListener("touchstart", (e) => {
     if (e.touches.length !== 1) return;
     touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now() };
@@ -493,6 +508,22 @@
     const dy = e.changedTouches[0].clientY - touchStart.y;
     const dx = e.changedTouches[0].clientX - touchStart.x;
     const fast = Date.now() - touchStart.t < 300;
+    const now = Date.now();
+    lastTouchAt = now;
+    // double-tap (two quick taps in the same spot, not on a button) toggles favourite
+    const onControl = e.target.closest && e.target.closest("button, a");
+    if (!onControl && Math.hypot(dx, dy) < 12 && now - touchStart.t < 300) {
+      const x = e.changedTouches[0].clientX, y = e.changedTouches[0].clientY;
+      if (lastTap && now - lastTap.t < 320 && Math.hypot(x - lastTap.x, y - lastTap.y) < 40) {
+        lastTap = null;
+        if (e.cancelable) e.preventDefault();
+        doubleTapFav();
+      } else {
+        lastTap = { t: now, x, y };
+      }
+    } else {
+      lastTap = null;
+    }
     touchStart = null;
     el.quote.style.transition = "";
     el.quote.style.transform = "";
@@ -500,6 +531,15 @@
     if (Math.abs(dy) > Math.abs(dx) && (Math.abs(dy) > 60 || (fast && Math.abs(dy) > 30))) {
       if (dy < 0) { go(1); hideHint(); } else go(-1);
     }
+  });
+
+  // Double-click on desktop (ignored right after touches, which some browsers also report as dblclick)
+  el.stage.addEventListener("dblclick", (e) => {
+    if (Date.now() - lastTouchAt < 800) return;
+    if (e.target.closest("button, a")) return;
+    const sel = window.getSelection && window.getSelection();
+    if (sel) sel.removeAllRanges();
+    doubleTapFav();
   });
 
   // Mouse wheel / trackpad on desktop (throttled)
@@ -518,15 +558,78 @@
   }
   try { if (localStorage.getItem(KEY + ".hint")) el.hint.classList.add("gone"); } catch (e) {}
 
+  // ---------- Quote of the day notification ----------
+  // Uses Periodic Background Sync: available to installed apps in Chrome and Edge
+  // (Android, Windows, macOS, ChromeOS). The service worker wakes about twice a day,
+  // and once per day after 7am picks a quote with the same preference model and shows it.
+  // The bell only appears where this works.
+  async function setupDaily(reg) {
+    if (!el.daily || !("Notification" in window) || !reg || !("periodicSync" in reg)) return;
+    let perm;
+    try { perm = await navigator.permissions.query({ name: "periodic-background-sync" }); } catch (e) { return; }
+    if (perm.state !== "granted") return; // not installed as an app
+    let tags = [];
+    try { tags = await reg.periodicSync.getTags(); } catch (e) {}
+    const paint = (on) => {
+      el.daily.setAttribute("aria-pressed", on);
+      el.daily.setAttribute("aria-label", on ? "Turn off quote of the day" : "Turn on quote of the day");
+    };
+    paint(tags.includes("qotd") && Notification.permission === "granted");
+    el.daily.hidden = false;
+    el.daily.addEventListener("click", async () => {
+      if (el.daily.getAttribute("aria-pressed") === "true") {
+        try { await reg.periodicSync.unregister("qotd"); } catch (e) {}
+        paint(false);
+        toast("Quote of the day is off");
+        return;
+      }
+      const result = await Notification.requestPermission();
+      if (result !== "granted") {
+        toast("Notifications are blocked. Allow them in settings to get a daily quote.");
+        return;
+      }
+      try {
+        await reg.periodicSync.register("qotd", { minInterval: 12 * 60 * 60 * 1000 });
+      } catch (e) {
+        toast("Couldn't schedule the daily quote on this device.");
+        return;
+      }
+      paint(true);
+      await mirrorPrefs(true);
+      if (reg.active) reg.active.postMessage({ type: "qotd-now" }); // today's quote right away
+      toast("Quote of the day is on. Here's today's.");
+    });
+  }
+
+  // Opening a notification focuses the app and shows that quote
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.addEventListener("message", (e) => {
+      if (e.data && e.data.type === "show-quote") jumpTo(e.data.id);
+    });
+  }
+
   // ---------- Start ----------
-  history.push(newEntry());
+  let startId = null;
+  try {
+    const params = new URLSearchParams(location.search);
+    startId = params.get("q");
+    if (startId) window.history.replaceState(null, "", location.pathname);
+  } catch (e) {}
+  if (startId && BY_ID.has(startId)) {
+    history.push({ id: startId, bg: pickBg() });
+  } else {
+    history.push(newEntry());
+  }
   pos = 0;
   paintQuote();
   showBg(history[0]);
   prefetchNext();
   save();
 
-  if ("serviceWorker" in navigator && location.protocol === "https:") {
-    navigator.serviceWorker.register("sw.js").catch(() => {});
+  if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
+    navigator.serviceWorker.register("sw.js")
+      .then(() => navigator.serviceWorker.ready)
+      .then(setupDaily)
+      .catch(() => {});
   }
 })();
