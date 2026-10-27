@@ -1,0 +1,23 @@
+# Stillpoint
+
+A calm, full-screen motivational quote app for desktop and mobile. Plain HTML/CSS/JS, no build step.
+
+## Features
+- One quote at a time, set large over a different nature photo each time
+- Meditation soundscape generated in the browser (play/pause, never autoplays)
+- Next/previous: arrow buttons, keyboard arrows, mouse wheel, or swipe up/down on phones
+- Like / dislike: tunes which themes and authors you see next (disliked quotes never return)
+- Favorites wall: starred quotes pinned as notes on a felt board; tap a note to reopen it
+- Installable as an app (PWA); preferences and favorites stay in your browser
+
+Keyboard: ← → next/previous, L like, D dislike, F favorite, M music.
+
+## Run locally
+Any static server works, e.g. `python -m http.server` in this folder, then open http://localhost:8000.
+
+## Project layout
+- `index.html`, `css/styles.css`
+- `js/quotes.js`: the curated quotes, each tagged with themes
+- `js/backgrounds.js`: Unsplash photo IDs
+- `js/ambient.js`: the generative music
+- `js/app.js`: navigation, preference model, favorites wall

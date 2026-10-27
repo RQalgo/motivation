@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Stillpoint</title>
+  <meta name="description" content="A calm place for one good quote at a time.">
+  <meta name="theme-color" content="#1f2a23">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://images.unsplash.com">
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,300..700&family=Kalam:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <main class="stage" id="stage" aria-live="polite">
+    <div class="bg" aria-hidden="true">
+      <div class="bg-layer" id="bgA"></div>
+      <div class="bg-layer" id="bgB"></div>
+      <div class="scrim"></div>
+    </div>
+
+    <header class="topbar">
+      <button class="pill" id="openWall" aria-label="Open your favorites wall">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="7" height="7" rx="1.2"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.2"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.2"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.2"/></svg>
+        <span>Favorites</span>
+        <span class="count" id="favCount">0</span>
+      </button>
+      <button class="icon-btn" id="musicBtn" aria-pressed="false" aria-label="Play meditation music">
+        <svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/></svg>
+        <svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14"/></svg>
+        <span class="eq" aria-hidden="true"><i></i><i></i><i></i></span>
+      </button>
+    </header>
+
+    <button class="nav nav-prev" id="prevBtn" aria-label="Previous quote">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+    </button>
+    <button class="nav nav-next" id="nextBtn" aria-label="Next quote">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>
+    </button>
+
+    <section class="quote-wrap">
+      <figure class="quote" id="quote">
+        <blockquote id="quoteText"></blockquote>
+        <figcaption id="quoteAuthor"></figcaption>
+      </figure>
+    </section>
+
+    <footer class="bottombar">
+      <a class="credit" id="credit" href="https://unsplash.com/?utm_source=stillpoint&utm_medium=referral" target="_blank" rel="noopener">Photo: Unsplash</a>
+      <div class="actions" role="group" aria-label="Rate this quote">
+        <button class="act" id="dislikeBtn" aria-pressed="false" aria-label="Show fewer quotes like this">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 14V2"/><path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z"/></svg>
+        </button>
+        <button class="act" id="likeBtn" aria-pressed="false" aria-label="Show more quotes like this">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10v12"/><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z"/></svg>
+        </button>
+        <button class="act act-fav" id="favBtn" aria-pressed="false" aria-label="Add to favorites">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.2l2.7 5.5 6 .9-4.4 4.2 1 6-5.3-2.8-5.3 2.8 1-6L3.3 9.6l6-.9z"/></svg>
+        </button>
+      </div>
+      <span class="hint" id="hint">Swipe up for the next quote</span>
+    </footer>
+
+    <div class="toast" id="toast" role="status"></div>
+  </main>
+
+  <section class="wall" id="wall" aria-hidden="true" aria-label="Favorites wall">
+    <header class="wall-head">
+      <div>
+        <h2>Your wall</h2>
+        <p id="wallSub">Quotes you starred, pinned in the order you found them.</p>
+      </div>
+      <button class="icon-btn dark" id="closeWall" aria-label="Close favorites wall">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </header>
+    <div class="board" id="board"></div>
+    <div class="empty" id="wallEmpty">
+      <p>Nothing pinned yet.</p>
+      <p>Tap the star on any quote and it will land here.</p>
+    </div>
+  </section>
+
+  <script src="js/quotes.js"></script>
+  <script src="js/backgrounds.js"></script>
+  <script src="js/ambient.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
