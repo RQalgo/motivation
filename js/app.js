@@ -362,89 +362,92 @@
   }
 
   // ---------- Music ----------
-  // Plays RQ's "40Hz Gamma Binaural Beats" track from a self-hosted audio file.
-  // Never autoplays; remembers where you left off; fades in and out.
-  const track = $("track");
-  const POS_KEY = KEY + ".musicPos";
+  // RQ's "40Hz Gamma Binaural Beats" track. The original repeats a ~74 s passage for
+  // two hours, so the app ships one cycle (0.9 MB) and loops it gaplessly with Web Audio.
+  // The file holds 0.5 s of padding either side of the loop so decoder delay never
+  // lands inside the loop window. Never autoplays; fades in and out.
+  const MUSIC = { url: "audio/focus-40hz.m4a", loopStart: 0.5, loopLength: 3544611 / 48000 };
+  let actx = null, musicGain = null, musicBuffer = null, musicSrc = null, loadPromise = null;
+  let startedAt = 0, offset = 0, musicOn = false;
   let headphoneTipShown = false;
   try { headphoneTipShown = !!localStorage.getItem(KEY + ".hp"); } catch (e) {}
-  let fadeRaf = 0;
 
   function setMusicUi(on) {
     el.music.setAttribute("aria-pressed", on);
     el.music.setAttribute("aria-label", on ? "Pause focus music" : "Play focus music");
   }
 
-  function fadeTo(target, ms, done) {
-    cancelAnimationFrame(fadeRaf);
-    const from = track.volume, t0 = performance.now();
-    const step = (now) => {
-      const k = Math.min(1, (now - t0) / ms);
-      try { track.volume = from + (target - from) * k; } catch (e) {}
-      if (k < 1) fadeRaf = requestAnimationFrame(step); else if (done) done();
-    };
-    fadeRaf = requestAnimationFrame(step);
+  function loadMusic() {
+    if (loadPromise) return loadPromise;
+    loadPromise = fetch(MUSIC.url)
+      .then((r) => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
+      .then((ab) => new Promise((res, rej) => actx.decodeAudioData(ab, res, rej)))
+      .then((buf) => (musicBuffer = buf))
+      .catch((e) => { loadPromise = null; throw e; });
+    return loadPromise;
   }
 
   async function startMusic() {
-    if (!track.currentSrc) track.load();
-    if (track.currentTime === 0) {
-      try {
-        const saved = parseFloat(localStorage.getItem(POS_KEY));
-        if (saved > 0) track.currentTime = saved;
-      } catch (e) {}
+    musicOn = true;
+    setMusicUi(true);
+    // the context must be created/resumed inside the tap for iOS
+    if (!actx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      actx = new AC();
+      musicGain = actx.createGain();
+      musicGain.gain.value = 0;
+      musicGain.connect(actx.destination);
     }
-    try { track.volume = 0; } catch (e) {}
+    actx.resume();
+    el.music.classList.add("loading");
     try {
-      await track.play();
-      fadeTo(1, 2000);
-      setMusicUi(true);
-      if (!headphoneTipShown) {
-        toast("Use headphones to hear the binaural beat");
-        headphoneTipShown = true;
-        try { localStorage.setItem(KEY + ".hp", "1"); } catch (e) {}
-      }
+      await loadMusic();
     } catch (e) {
+      el.music.classList.remove("loading");
+      musicOn = false;
       setMusicUi(false);
-      toast("Couldn't start the music. Tap the button to try again.");
+      toast("Couldn't load the music. Check your connection and try again.");
+      return;
+    }
+    el.music.classList.remove("loading");
+    if (!musicOn) return; // paused while loading
+    if (musicSrc) { try { musicSrc.stop(); } catch (e) {} }
+    musicSrc = actx.createBufferSource();
+    musicSrc.buffer = musicBuffer;
+    musicSrc.loop = true;
+    musicSrc.loopStart = MUSIC.loopStart;
+    musicSrc.loopEnd = MUSIC.loopStart + MUSIC.loopLength;
+    musicSrc.connect(musicGain);
+    const t = actx.currentTime;
+    musicSrc.start(t, MUSIC.loopStart + offset);
+    startedAt = t - offset;
+    musicGain.gain.cancelScheduledValues(t);
+    musicGain.gain.setValueAtTime(musicGain.gain.value, t);
+    musicGain.gain.linearRampToValueAtTime(1, t + 2);
+    if (!headphoneTipShown) {
+      toast("Use headphones to hear the binaural beat");
+      headphoneTipShown = true;
+      try { localStorage.setItem(KEY + ".hp", "1"); } catch (e) {}
     }
   }
 
   function stopMusic() {
+    musicOn = false;
     setMusicUi(false);
-    fadeTo(0, 900, () => track.pause());
+    el.music.classList.remove("loading");
+    if (!actx || !musicSrc) return;
+    const t = actx.currentTime;
+    offset = (t - startedAt) % MUSIC.loopLength; // resume from the same spot
+    musicGain.gain.cancelScheduledValues(t);
+    musicGain.gain.setValueAtTime(musicGain.gain.value, t);
+    musicGain.gain.linearRampToValueAtTime(0, t + 1);
+    const src = musicSrc;
+    musicSrc = null;
+    src.stop(t + 1.05);
+    setTimeout(() => { if (!musicOn) actx.suspend(); }, 1200);
   }
 
-  el.music.addEventListener("click", () => {
-    if (el.music.getAttribute("aria-pressed") === "true") stopMusic(); else startMusic();
-  });
-  track.addEventListener("waiting", () => el.music.classList.add("loading"));
-  track.addEventListener("playing", () => el.music.classList.remove("loading"));
-  // keep the button in sync when playback is changed from headset / lock-screen controls
-  track.addEventListener("play", () => setMusicUi(true));
-  track.addEventListener("pause", () => { el.music.classList.remove("loading"); setMusicUi(false); });
-  track.addEventListener("error", () => {
-    el.music.classList.remove("loading");
-    setMusicUi(false);
-    toast("Couldn't load the music. Check your connection and try again.");
-  });
-  // remember the position so the track resumes where you left off
-  setInterval(() => {
-    if (!track.paused) { try { localStorage.setItem(POS_KEY, String(Math.floor(track.currentTime))); } catch (e) {} }
-  }, 5000);
-  // lock-screen / headset controls
-  if ("mediaSession" in navigator) {
-    try {
-      navigator.mediaSession.metadata = new MediaMetadata({
-        title: "40Hz Gamma Binaural Beats",
-        artist: "Study Sonic Focus",
-        album: "Stillpoint",
-        artwork: [{ src: "icons/icon-512.png", sizes: "512x512", type: "image/png" }],
-      });
-      navigator.mediaSession.setActionHandler("play", startMusic);
-      navigator.mediaSession.setActionHandler("pause", stopMusic);
-    } catch (e) {}
-  }
+  el.music.addEventListener("click", () => { if (musicOn) stopMusic(); else startMusic(); });
 
   // ---------- Input ----------
   el.next.addEventListener("click", () => go(1));

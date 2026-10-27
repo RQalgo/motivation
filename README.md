@@ -4,7 +4,7 @@ A calm, full-screen motivational quote app for desktop and mobile. Plain HTML/CS
 
 ## Features
 - One quote at a time, set large over a different nature photo each time
-- Meditation soundscape generated in the browser (play/pause, never autoplays)
+- Focus music: a 74-second cycle of the 40 Hz gamma binaural track, looped gaplessly (0.9 MB, loads only when you press play)
 - Next/previous: arrow buttons, keyboard arrows, mouse wheel, or swipe up/down on phones
 - Like / dislike: tunes which themes and authors you see next (disliked quotes never return)
 - Favorites wall: starred quotes pinned as notes on a felt board; tap a note to reopen it
