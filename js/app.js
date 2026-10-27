@@ -87,11 +87,18 @@
   };
 
   // ---------- Backgrounds ----------
-  function bgUrl(id) {
+  // Requested photo size, rounded to 200px steps so the cache is reused.
+  // Falls back to the screen size when the window has no size yet (hidden tab or pane).
+  function viewSize() {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const w = Math.round(Math.min(2400, window.innerWidth * dpr) / 100) * 100;
-    const h = Math.round(Math.min(2400, window.innerHeight * dpr) / 100) * 100;
-    return `https://images.unsplash.com/photo-${id}?auto=format&fit=crop&crop=entropy&w=${w}&h=${h}&q=78`;
+    const vw = window.innerWidth || document.documentElement.clientWidth || screen.width || 1280;
+    const vh = window.innerHeight || document.documentElement.clientHeight || screen.height || 800;
+    const step = (v) => Math.max(600, Math.min(2400, Math.ceil((v * dpr) / 200) * 200));
+    return { w: step(vw), h: step(vh) };
+  }
+  let reqSize = viewSize();
+  function bgUrl(id) {
+    return `https://images.unsplash.com/photo-${id}?auto=format&fit=crop&crop=entropy&w=${reqSize.w}&h=${reqSize.h}&q=78`;
   }
   const preloaded = new Map();
   function loadImage(id) {
@@ -129,6 +136,21 @@
     frontLayer.classList.remove("show");
     frontLayer = back;
   }
+
+  // If the window grows or changes shape a lot (rotation, pane opened), refetch at the new size.
+  let resizeTimer;
+  window.addEventListener("resize", () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      const next = viewSize();
+      const ratioOld = reqSize.w / reqSize.h, ratioNew = next.w / next.h;
+      if (next.w > reqSize.w * 1.3 || next.h > reqSize.h * 1.3 || Math.abs(ratioNew - ratioOld) > 0.35) {
+        reqSize = next;
+        preloaded.clear();
+        if (pos >= 0) showBg(history[pos]);
+      }
+    }, 400);
+  });
 
   // ---------- History & rendering ----------
   const history = [];
