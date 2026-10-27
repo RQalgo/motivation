@@ -363,11 +363,44 @@
 
   // ---------- Music ----------
   const ambient = new window.Ambient();
+  const MODES = window.Ambient.MODES;
+  const modeBtn = $("modeBtn"), modeName = $("modeName"), modeHz = $("modeHz");
+  let mode = "gamma";
+  try { const m = localStorage.getItem(KEY + ".mode"); if (MODES[m]) mode = m; } catch (e) {}
+  let headphoneTipShown = false;
+  try { headphoneTipShown = !!localStorage.getItem(KEY + ".hp"); } catch (e) {}
+
+  function paintMode() {
+    const m = MODES[mode];
+    modeName.textContent = m.label;
+    modeHz.textContent = m.hz;
+    const other = MODES[mode === "gamma" ? "alpha" : "gamma"];
+    modeBtn.setAttribute("aria-label", `${m.label} ${m.hz} (${m.note}). Switch to ${other.label} ${other.hz}`);
+  }
+  paintMode();
+  ambient.setMode(mode);
+
+  modeBtn.addEventListener("click", () => {
+    mode = mode === "gamma" ? "alpha" : "gamma";
+    try { localStorage.setItem(KEY + ".mode", mode); } catch (e) {}
+    ambient.setMode(mode);
+    paintMode();
+    const m = MODES[mode];
+    toast(`${m.label} ${m.hz} for ${m.note}`);
+  });
+
   el.music.addEventListener("click", () => {
     const on = el.music.getAttribute("aria-pressed") !== "true";
     el.music.setAttribute("aria-pressed", on);
-    el.music.setAttribute("aria-label", on ? "Pause meditation music" : "Play meditation music");
-    if (on) ambient.play(); else ambient.pause();
+    el.music.setAttribute("aria-label", on ? "Pause binaural music" : "Play binaural music");
+    if (on) {
+      ambient.play();
+      if (!headphoneTipShown) {
+        toast("Use headphones to hear the binaural beat");
+        headphoneTipShown = true;
+        try { localStorage.setItem(KEY + ".hp", "1"); } catch (e) {}
+      }
+    } else ambient.pause();
   });
 
   // ---------- Input ----------

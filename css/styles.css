@@ -95,6 +95,10 @@ svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width:
 .count.bump { animation: bump 0.45s ease; }
 @keyframes bump { 40% { transform: scale(1.3); } }
 
+.sound { display: flex; align-items: center; gap: 10px; }
+.pill.mode { padding: 0 16px; gap: 8px; }
+.mode-name { font-weight: 600; }
+.mode-hz { opacity: 0.8; font-variant-numeric: tabular-nums; }
 .icon-btn {
   width: 44px; height: 44px; border-radius: 50%;
   display: grid; place-items: center; position: relative;
@@ -214,7 +218,6 @@ svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width:
   .hint { order: 2; justify-self: center; display: block; transition: opacity 0.6s; }
   .hint.gone { opacity: 0; height: 0; margin-top: -14px; }
   .actions { order: 1; gap: 18px; }
-  .pill span:first-of-type { display: inline; }
   .toast { bottom: calc(150px + var(--safe-b)); }
 }
 
@@ -307,6 +310,12 @@ svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width:
   .note { padding: 28px 14px 14px; min-height: 140px; margin-bottom: 18px; }
   .note p { font-size: 17px; line-height: 1.28; }
   .note .by { font-size: 12px; margin-top: 10px; }
+}
+
+@media (max-width: 430px) {
+  #openWall span:not(.count) { display: none; }
+  #openWall { padding: 0 8px 0 14px; }
+  .pill.mode { padding: 0 14px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

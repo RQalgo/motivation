@@ -1,18 +1,23 @@
-// Generative meditation soundscape built with the Web Audio API.
-// Slow, soft chord swells (no constant tone), gentle ocean-like noise,
-// and the occasional quiet bell, all through a long reverb.
+// Binaural-beat soundscape built with the Web Audio API.
+// Modelled on a 40 Hz gamma study track: a steady pure tone in each ear whose
+// frequencies differ by the target brainwave rate (heard as a beat on headphones),
+// over a slow, dark pad cycling Eb -> Fm -> Bb -> Cm with nothing bright above ~1 kHz.
 (function () {
-  // Warm, unresolved chords that flow into each other (Hz)
+  const MODES = {
+    gamma: { left: 130.81, beat: 40, label: "Gamma", hz: "40 Hz", note: "focus" },
+    alpha: { left: 130.81, beat: 10, label: "Alpha", hz: "10 Hz", note: "calm" },
+  };
+
+  // Chord voicings (Hz): low bass note first, then the upper voices.
   const CHORDS = [
-    [110.0, 164.81, 246.94, 261.63, 329.63],   // Am(add9)
-    [87.31, 130.81, 220.0, 261.63, 329.63],    // Fmaj7
-    [130.81, 196.0, 246.94, 329.63, 392.0],    // Cmaj7
-    [98.0, 146.83, 246.94, 293.66, 329.63],    // G6
+    [77.78, 116.54, 155.56, 196.0, 233.08, 311.13],   // Eb
+    [87.31, 130.81, 174.61, 207.65, 261.63, 349.23],  // Fm
+    [58.27, 116.54, 174.61, 233.08, 293.66, 349.23],  // Bb
+    [65.41, 98.0, 196.0, 261.63, 311.13, 392.0],      // Cm
   ];
-  const BELLS = [523.25, 587.33, 659.25, 783.99, 880.0]; // C D E G A, high and soft
-  const CHORD_EVERY = 11;   // seconds between chord starts
-  const CHORD_ATTACK = 6;   // slow fade in
-  const CHORD_RELEASE = 9;  // long fade out, overlapping the next chord
+  const CHORD_EVERY = 10;  // seconds per chord, as in the reference track
+  const ATTACK = 4;
+  const RELEASE = 7;       // overlaps the next chord so changes are seamless
 
   class Ambient {
     constructor() {
@@ -20,7 +25,10 @@
       this.playing = false;
       this.timers = [];
       this.chordIndex = 0;
+      this.mode = "gamma";
     }
+
+    static get MODES() { return MODES; }
 
     _build() {
       const AC = window.AudioContext || window.webkitAudioContext;
@@ -28,73 +36,53 @@
 
       this.master = ctx.createGain();
       this.master.gain.value = 0;
-      // gentle compression keeps swells from ever getting loud
       const comp = ctx.createDynamicsCompressor();
-      comp.threshold.value = -24;
-      comp.ratio.value = 3;
+      comp.threshold.value = -20;
+      comp.ratio.value = 2.5;
       this.master.connect(comp).connect(ctx.destination);
 
+      // Binaural carriers: one pure sine hard left, one hard right.
+      const merger = ctx.createChannelMerger(2);
+      const m = MODES[this.mode];
+      this.oscL = ctx.createOscillator();
+      this.oscR = ctx.createOscillator();
+      this.oscL.type = this.oscR.type = "sine";
+      this.oscL.frequency.value = m.left;
+      this.oscR.frequency.value = m.left + m.beat;
+      const gL = ctx.createGain(), gR = ctx.createGain();
+      gL.gain.value = gR.gain.value = 0.12;
+      this.oscL.connect(gL).connect(merger, 0, 0);
+      this.oscR.connect(gR).connect(merger, 0, 1);
+      merger.connect(this.master);
+      this.oscL.start();
+      this.oscR.start();
+
+      // Short, soft reverb for the pad only (carriers stay dry so each ear hears one clean tone).
       this.reverb = ctx.createConvolver();
-      this.reverb.buffer = this._impulse(6, 2.2);
+      this.reverb.buffer = this._impulse(3.5, 2.5);
       const wet = ctx.createGain();
-      wet.gain.value = 0.7;
+      wet.gain.value = 0.35;
       this.reverb.connect(wet).connect(this.master);
 
-      // Pad bus: dark lowpass so nothing is piercing
+      // Pad bus: warm lowpass, nothing piercing.
       this.pad = ctx.createBiquadFilter();
       this.pad.type = "lowpass";
-      this.pad.frequency.value = 900;
-      this.pad.Q.value = 0.3;
+      this.pad.frequency.value = 950;
+      this.pad.Q.value = 0.4;
       const padGain = ctx.createGain();
-      padGain.gain.value = 1.0;
+      padGain.gain.value = 1;
       this.pad.connect(padGain);
       padGain.connect(this.master);
       padGain.connect(this.reverb);
-
-      // Soft brown noise that swells slowly, like distant waves
-      const noise = ctx.createBufferSource();
-      noise.buffer = this._brownNoise(10);
-      noise.loop = true;
-      const nFilter = ctx.createBiquadFilter();
-      nFilter.type = "lowpass";
-      nFilter.frequency.value = 500;
-      const nGain = ctx.createGain();
-      nGain.gain.value = 0.045;
-      const swell = ctx.createOscillator();
-      swell.frequency.value = 0.07; // one wave every ~14s
-      const swellAmt = ctx.createGain();
-      swellAmt.gain.value = 0.035;
-      swell.connect(swellAmt).connect(nGain.gain);
-      noise.connect(nFilter).connect(nGain).connect(this.master);
-      noise.start();
-      swell.start();
     }
 
     _impulse(seconds, decay) {
       const ctx = this.ctx;
-      const len = ctx.sampleRate * seconds;
+      const len = Math.floor(ctx.sampleRate * seconds);
       const buf = ctx.createBuffer(2, len, ctx.sampleRate);
       for (let c = 0; c < 2; c++) {
         const d = buf.getChannelData(c);
         for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay);
-      }
-      return buf;
-    }
-
-    _brownNoise(seconds) {
-      const ctx = this.ctx;
-      const len = ctx.sampleRate * seconds;
-      const buf = ctx.createBuffer(1, len, ctx.sampleRate);
-      const d = buf.getChannelData(0);
-      let last = 0;
-      for (let i = 0; i < len; i++) {
-        last = (last + 0.02 * (Math.random() * 2 - 1)) / 1.02;
-        d[i] = last * 3.5;
-      }
-      const fade = Math.floor(ctx.sampleRate * 0.5); // crossfade the loop seam
-      for (let i = 0; i < fade; i++) {
-        const k = i / fade;
-        d[len - fade + i] = d[len - fade + i] * (1 - k) + d[i] * k;
       }
       return buf;
     }
@@ -104,55 +92,48 @@
     _chord() {
       if (!this.playing) return;
       const ctx = this.ctx;
-      const t = ctx.currentTime;
+      const t = ctx.currentTime + 0.05;
       const notes = CHORDS[this.chordIndex % CHORDS.length];
       this.chordIndex++;
-      const end = t + CHORD_ATTACK + (CHORD_EVERY - CHORD_ATTACK) + CHORD_RELEASE;
+      const hold = t + CHORD_EVERY;
+      const end = hold + RELEASE;
       notes.forEach((f, i) => {
-        const o = ctx.createOscillator();
-        o.type = "sine";
-        o.frequency.value = f;
+        // bass note on a soft triangle for warmth, upper voices pure sine
         const g = ctx.createGain();
-        // lower notes a little louder, upper notes quieter
-        const level = (i === 0 ? 0.05 : 0.03) * (1 - i * 0.08);
-        // stagger the entries slightly so the chord blooms rather than starts
-        const start = t + i * 0.6;
-        g.gain.setValueAtTime(0, start);
-        g.gain.linearRampToValueAtTime(level, start + CHORD_ATTACK);
-        g.gain.setValueAtTime(level, t + CHORD_EVERY);
+        const level = i === 0 ? 0.1 : 0.05;
+        g.gain.setValueAtTime(0, t);
+        g.gain.linearRampToValueAtTime(level, t + ATTACK);
+        g.gain.setValueAtTime(level, hold);
         g.gain.linearRampToValueAtTime(0, end);
-        let node = g;
-        if (ctx.createStereoPanner) {
-          const p = ctx.createStereoPanner();
-          p.pan.value = (i / (notes.length - 1)) * 0.8 - 0.4;
-          g.connect(p);
-          node = p;
-        }
+        const o = ctx.createOscillator();
+        o.type = i === 0 ? "triangle" : "sine";
+        o.frequency.value = f;
+        // a very slow, slight drift keeps sustained notes from sounding static
+        o.detune.setValueAtTime((Math.random() - 0.5) * 6, t);
         o.connect(g);
-        node.connect(this.pad);
-        o.start(start);
+        let out = g;
+        if (ctx.createStereoPanner && i > 0) {
+          const p = ctx.createStereoPanner();
+          p.pan.value = (i % 2 ? -1 : 1) * 0.35;
+          g.connect(p);
+          out = p;
+        }
+        out.connect(this.pad);
+        o.start(t);
         o.stop(end + 0.1);
       });
       this._later(() => this._chord(), CHORD_EVERY * 1000);
     }
 
-    _bell() {
-      if (!this.playing) return;
-      const ctx = this.ctx;
-      const t = ctx.currentTime;
-      const f = BELLS[Math.floor(Math.random() * BELLS.length)];
-      const g = ctx.createGain();
-      g.gain.setValueAtTime(0, t);
-      g.gain.linearRampToValueAtTime(0.018, t + 0.4);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + 8);
-      const o = ctx.createOscillator();
-      o.type = "sine";
-      o.frequency.value = f;
-      o.connect(g);
-      g.connect(this.reverb); // mostly reverb: distant, not in your ear
-      o.start(t);
-      o.stop(t + 8.2);
-      this._later(() => this._bell(), 9000 + Math.random() * 12000);
+    setMode(mode) {
+      if (!MODES[mode]) return;
+      this.mode = mode;
+      if (!this.ctx) return;
+      const m = MODES[mode];
+      const t = this.ctx.currentTime;
+      // glide smoothly to the new beat rate
+      this.oscL.frequency.setTargetAtTime(m.left, t, 0.8);
+      this.oscR.frequency.setTargetAtTime(m.left + m.beat, t, 0.8);
     }
 
     async play() {
@@ -160,12 +141,12 @@
       await this.ctx.resume();
       if (this.playing) return;
       this.playing = true;
+      this.setMode(this.mode);
       const t = this.ctx.currentTime;
       this.master.gain.cancelScheduledValues(t);
       this.master.gain.setValueAtTime(this.master.gain.value, t);
-      this.master.gain.linearRampToValueAtTime(1.4, t + 4);
+      this.master.gain.linearRampToValueAtTime(1, t + 4);
       this._chord();
-      this._later(() => this._bell(), 6000);
     }
 
     pause() {

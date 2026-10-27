@@ -31,11 +31,17 @@
         <span>Favorites</span>
         <span class="count" id="favCount">0</span>
       </button>
-      <button class="icon-btn" id="musicBtn" aria-pressed="false" aria-label="Play meditation music">
-        <svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/></svg>
-        <svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14"/></svg>
-        <span class="eq" aria-hidden="true"><i></i><i></i><i></i></span>
-      </button>
+      <div class="sound">
+        <button class="pill mode" id="modeBtn" aria-label="Switch brainwave mode">
+          <span class="mode-name" id="modeName">Gamma</span>
+          <span class="mode-hz" id="modeHz">40 Hz</span>
+        </button>
+        <button class="icon-btn" id="musicBtn" aria-pressed="false" aria-label="Play binaural music">
+          <svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 14v-2a9 9 0 0 1 18 0v2"/><path d="M21 15a2 2 0 0 1-2 2h-1v-6h1a2 2 0 0 1 2 2zM3 15a2 2 0 0 0 2 2h1v-6H5a2 2 0 0 0-2 2z"/></svg>
+          <svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14"/></svg>
+          <span class="eq" aria-hidden="true"><i></i><i></i><i></i></span>
+        </button>
+      </div>
     </header>
 
     <button class="nav nav-prev" id="prevBtn" aria-label="Previous quote">
