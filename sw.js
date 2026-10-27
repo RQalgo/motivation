@@ -1,5 +1,5 @@
 // Network-first for the app shell so updates show up immediately; cache is the offline fallback.
-const CACHE = "stillpoint-v1";
+const CACHE = "stillpoint-v2";
 const SHELL = ["./", "index.html", "css/styles.css", "js/app.js", "js/quotes.js", "js/backgrounds.js", "js/ambient.js", "manifest.webmanifest", "icons/icon.svg"];
 
 self.addEventListener("install", (e) => {

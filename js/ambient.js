@@ -1,13 +1,25 @@
 // Generative meditation soundscape built with the Web Audio API.
-// A warm drone, soft "wind/ocean" noise and slow random chimes through a reverb.
+// Slow, soft chord swells (no constant tone), gentle ocean-like noise,
+// and the occasional quiet bell, all through a long reverb.
 (function () {
-  const PENTATONIC = [220.0, 261.63, 293.66, 329.63, 392.0, 440.0, 523.25, 587.33]; // A minor pentatonic
+  // Warm, unresolved chords that flow into each other (Hz)
+  const CHORDS = [
+    [110.0, 164.81, 246.94, 261.63, 329.63],   // Am(add9)
+    [87.31, 130.81, 220.0, 261.63, 329.63],    // Fmaj7
+    [130.81, 196.0, 246.94, 329.63, 392.0],    // Cmaj7
+    [98.0, 146.83, 246.94, 293.66, 329.63],    // G6
+  ];
+  const BELLS = [523.25, 587.33, 659.25, 783.99, 880.0]; // C D E G A, high and soft
+  const CHORD_EVERY = 11;   // seconds between chord starts
+  const CHORD_ATTACK = 6;   // slow fade in
+  const CHORD_RELEASE = 9;  // long fade out, overlapping the next chord
 
   class Ambient {
     constructor() {
       this.ctx = null;
       this.playing = false;
-      this.chimeTimer = null;
+      this.timers = [];
+      this.chordIndex = 0;
     }
 
     _build() {
@@ -16,50 +28,40 @@
 
       this.master = ctx.createGain();
       this.master.gain.value = 0;
-      this.master.connect(ctx.destination);
+      // gentle compression keeps swells from ever getting loud
+      const comp = ctx.createDynamicsCompressor();
+      comp.threshold.value = -24;
+      comp.ratio.value = 3;
+      this.master.connect(comp).connect(ctx.destination);
 
-      // Reverb from a generated impulse response
       this.reverb = ctx.createConvolver();
-      this.reverb.buffer = this._impulse(5, 2.6);
+      this.reverb.buffer = this._impulse(6, 2.2);
       const wet = ctx.createGain();
-      wet.gain.value = 0.55;
+      wet.gain.value = 0.7;
       this.reverb.connect(wet).connect(this.master);
 
-      // Drone: two detuned voice pairs through a lowpass with slow movement
-      const droneFilter = ctx.createBiquadFilter();
-      droneFilter.type = "lowpass";
-      droneFilter.frequency.value = 520;
-      droneFilter.Q.value = 0.4;
-      const droneGain = ctx.createGain();
-      droneGain.gain.value = 0.11;
-      droneFilter.connect(droneGain);
-      droneGain.connect(this.master);
-      droneGain.connect(this.reverb);
-      [110, 110.4, 164.81, 165.2].forEach((f, i) => {
-        const o = ctx.createOscillator();
-        o.type = i % 2 ? "triangle" : "sine";
-        o.frequency.value = f;
-        o.connect(droneFilter);
-        o.start();
-      });
-      const lfo = ctx.createOscillator();
-      lfo.frequency.value = 0.05;
-      const lfoAmt = ctx.createGain();
-      lfoAmt.gain.value = 180;
-      lfo.connect(lfoAmt).connect(droneFilter.frequency);
-      lfo.start();
+      // Pad bus: dark lowpass so nothing is piercing
+      this.pad = ctx.createBiquadFilter();
+      this.pad.type = "lowpass";
+      this.pad.frequency.value = 900;
+      this.pad.Q.value = 0.3;
+      const padGain = ctx.createGain();
+      padGain.gain.value = 1.0;
+      this.pad.connect(padGain);
+      padGain.connect(this.master);
+      padGain.connect(this.reverb);
 
-      // Soft brown noise that swells like distant waves
+      // Soft brown noise that swells slowly, like distant waves
       const noise = ctx.createBufferSource();
-      noise.buffer = this._brownNoise(8);
+      noise.buffer = this._brownNoise(10);
       noise.loop = true;
       const nFilter = ctx.createBiquadFilter();
       nFilter.type = "lowpass";
-      nFilter.frequency.value = 420;
+      nFilter.frequency.value = 500;
       const nGain = ctx.createGain();
-      nGain.gain.value = 0.05;
+      nGain.gain.value = 0.045;
       const swell = ctx.createOscillator();
-      swell.frequency.value = 0.09;
+      swell.frequency.value = 0.07; // one wave every ~14s
       const swellAmt = ctx.createGain();
       swellAmt.gain.value = 0.035;
       swell.connect(swellAmt).connect(nGain.gain);
@@ -89,8 +91,7 @@
         last = (last + 0.02 * (Math.random() * 2 - 1)) / 1.02;
         d[i] = last * 3.5;
       }
-      // crossfade the loop seam
-      const fade = Math.floor(ctx.sampleRate * 0.5);
+      const fade = Math.floor(ctx.sampleRate * 0.5); // crossfade the loop seam
       for (let i = 0; i < fade; i++) {
         const k = i / fade;
         d[len - fade + i] = d[len - fade + i] * (1 - k) + d[i] * k;
@@ -98,59 +99,85 @@
       return buf;
     }
 
-    _chime() {
+    _later(fn, ms) { this.timers.push(setTimeout(fn, ms)); }
+
+    _chord() {
       if (!this.playing) return;
       const ctx = this.ctx;
       const t = ctx.currentTime;
-      const f = PENTATONIC[Math.floor(Math.random() * PENTATONIC.length)];
-      const g = ctx.createGain();
-      g.gain.setValueAtTime(0, t);
-      g.gain.linearRampToValueAtTime(0.05 + Math.random() * 0.03, t + 0.9);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + 7);
-      const pan = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
-      [1, 2.0].forEach((mult, i) => {
+      const notes = CHORDS[this.chordIndex % CHORDS.length];
+      this.chordIndex++;
+      const end = t + CHORD_ATTACK + (CHORD_EVERY - CHORD_ATTACK) + CHORD_RELEASE;
+      notes.forEach((f, i) => {
         const o = ctx.createOscillator();
         o.type = "sine";
-        o.frequency.value = f * mult;
-        const og = ctx.createGain();
-        og.gain.value = i ? 0.18 : 1;
-        o.connect(og).connect(g);
-        o.start(t);
-        o.stop(t + 7.2);
+        o.frequency.value = f;
+        const g = ctx.createGain();
+        // lower notes a little louder, upper notes quieter
+        const level = (i === 0 ? 0.05 : 0.03) * (1 - i * 0.08);
+        // stagger the entries slightly so the chord blooms rather than starts
+        const start = t + i * 0.6;
+        g.gain.setValueAtTime(0, start);
+        g.gain.linearRampToValueAtTime(level, start + CHORD_ATTACK);
+        g.gain.setValueAtTime(level, t + CHORD_EVERY);
+        g.gain.linearRampToValueAtTime(0, end);
+        let node = g;
+        if (ctx.createStereoPanner) {
+          const p = ctx.createStereoPanner();
+          p.pan.value = (i / (notes.length - 1)) * 0.8 - 0.4;
+          g.connect(p);
+          node = p;
+        }
+        o.connect(g);
+        node.connect(this.pad);
+        o.start(start);
+        o.stop(end + 0.1);
       });
-      if (pan) {
-        pan.pan.value = Math.random() * 1.2 - 0.6;
-        g.connect(pan);
-        pan.connect(this.reverb);
-        pan.connect(this.master);
-      } else {
-        g.connect(this.reverb);
-        g.connect(this.master);
-      }
-      this.chimeTimer = setTimeout(() => this._chime(), 2500 + Math.random() * 4500);
+      this._later(() => this._chord(), CHORD_EVERY * 1000);
+    }
+
+    _bell() {
+      if (!this.playing) return;
+      const ctx = this.ctx;
+      const t = ctx.currentTime;
+      const f = BELLS[Math.floor(Math.random() * BELLS.length)];
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(0.018, t + 0.4);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 8);
+      const o = ctx.createOscillator();
+      o.type = "sine";
+      o.frequency.value = f;
+      o.connect(g);
+      g.connect(this.reverb); // mostly reverb: distant, not in your ear
+      o.start(t);
+      o.stop(t + 8.2);
+      this._later(() => this._bell(), 9000 + Math.random() * 12000);
     }
 
     async play() {
       if (!this.ctx) this._build();
       await this.ctx.resume();
+      if (this.playing) return;
       this.playing = true;
       const t = this.ctx.currentTime;
       this.master.gain.cancelScheduledValues(t);
       this.master.gain.setValueAtTime(this.master.gain.value, t);
-      this.master.gain.linearRampToValueAtTime(0.8, t + 3);
-      clearTimeout(this.chimeTimer);
-      this.chimeTimer = setTimeout(() => this._chime(), 1200);
+      this.master.gain.linearRampToValueAtTime(1.4, t + 4);
+      this._chord();
+      this._later(() => this._bell(), 6000);
     }
 
     pause() {
       if (!this.ctx) return;
       this.playing = false;
-      clearTimeout(this.chimeTimer);
+      this.timers.forEach(clearTimeout);
+      this.timers = [];
       const t = this.ctx.currentTime;
       this.master.gain.cancelScheduledValues(t);
       this.master.gain.setValueAtTime(this.master.gain.value, t);
-      this.master.gain.linearRampToValueAtTime(0, t + 1.2);
-      setTimeout(() => { if (!this.playing) this.ctx.suspend(); }, 1300);
+      this.master.gain.linearRampToValueAtTime(0, t + 1.5);
+      this._later(() => { if (!this.playing) this.ctx.suspend(); }, 1600);
     }
   }
 
