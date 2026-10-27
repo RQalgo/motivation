@@ -362,46 +362,89 @@
   }
 
   // ---------- Music ----------
-  const ambient = new window.Ambient();
-  const MODES = window.Ambient.MODES;
-  const modeBtn = $("modeBtn"), modeName = $("modeName"), modeHz = $("modeHz");
-  let mode = "gamma";
-  try { const m = localStorage.getItem(KEY + ".mode"); if (MODES[m]) mode = m; } catch (e) {}
+  // Plays RQ's "40Hz Gamma Binaural Beats" track from a self-hosted audio file.
+  // Never autoplays; remembers where you left off; fades in and out.
+  const track = $("track");
+  const POS_KEY = KEY + ".musicPos";
   let headphoneTipShown = false;
   try { headphoneTipShown = !!localStorage.getItem(KEY + ".hp"); } catch (e) {}
+  let fadeRaf = 0;
 
-  function paintMode() {
-    const m = MODES[mode];
-    modeName.textContent = m.label;
-    modeHz.textContent = m.hz;
-    const other = MODES[mode === "gamma" ? "alpha" : "gamma"];
-    modeBtn.setAttribute("aria-label", `${m.label} ${m.hz} (${m.note}). Switch to ${other.label} ${other.hz}`);
-  }
-  paintMode();
-  ambient.setMode(mode);
-
-  modeBtn.addEventListener("click", () => {
-    mode = mode === "gamma" ? "alpha" : "gamma";
-    try { localStorage.setItem(KEY + ".mode", mode); } catch (e) {}
-    ambient.setMode(mode);
-    paintMode();
-    const m = MODES[mode];
-    toast(`${m.label} ${m.hz} for ${m.note}`);
-  });
-
-  el.music.addEventListener("click", () => {
-    const on = el.music.getAttribute("aria-pressed") !== "true";
+  function setMusicUi(on) {
     el.music.setAttribute("aria-pressed", on);
-    el.music.setAttribute("aria-label", on ? "Pause binaural music" : "Play binaural music");
-    if (on) {
-      ambient.play();
+    el.music.setAttribute("aria-label", on ? "Pause focus music" : "Play focus music");
+  }
+
+  function fadeTo(target, ms, done) {
+    cancelAnimationFrame(fadeRaf);
+    const from = track.volume, t0 = performance.now();
+    const step = (now) => {
+      const k = Math.min(1, (now - t0) / ms);
+      try { track.volume = from + (target - from) * k; } catch (e) {}
+      if (k < 1) fadeRaf = requestAnimationFrame(step); else if (done) done();
+    };
+    fadeRaf = requestAnimationFrame(step);
+  }
+
+  async function startMusic() {
+    if (!track.currentSrc) track.load();
+    if (track.currentTime === 0) {
+      try {
+        const saved = parseFloat(localStorage.getItem(POS_KEY));
+        if (saved > 0) track.currentTime = saved;
+      } catch (e) {}
+    }
+    try { track.volume = 0; } catch (e) {}
+    try {
+      await track.play();
+      fadeTo(1, 2000);
+      setMusicUi(true);
       if (!headphoneTipShown) {
         toast("Use headphones to hear the binaural beat");
         headphoneTipShown = true;
         try { localStorage.setItem(KEY + ".hp", "1"); } catch (e) {}
       }
-    } else ambient.pause();
+    } catch (e) {
+      setMusicUi(false);
+      toast("Couldn't start the music. Tap the button to try again.");
+    }
+  }
+
+  function stopMusic() {
+    setMusicUi(false);
+    fadeTo(0, 900, () => track.pause());
+  }
+
+  el.music.addEventListener("click", () => {
+    if (el.music.getAttribute("aria-pressed") === "true") stopMusic(); else startMusic();
   });
+  track.addEventListener("waiting", () => el.music.classList.add("loading"));
+  track.addEventListener("playing", () => el.music.classList.remove("loading"));
+  // keep the button in sync when playback is changed from headset / lock-screen controls
+  track.addEventListener("play", () => setMusicUi(true));
+  track.addEventListener("pause", () => { el.music.classList.remove("loading"); setMusicUi(false); });
+  track.addEventListener("error", () => {
+    el.music.classList.remove("loading");
+    setMusicUi(false);
+    toast("Couldn't load the music. Check your connection and try again.");
+  });
+  // remember the position so the track resumes where you left off
+  setInterval(() => {
+    if (!track.paused) { try { localStorage.setItem(POS_KEY, String(Math.floor(track.currentTime))); } catch (e) {} }
+  }, 5000);
+  // lock-screen / headset controls
+  if ("mediaSession" in navigator) {
+    try {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: "40Hz Gamma Binaural Beats",
+        artist: "Study Sonic Focus",
+        album: "Stillpoint",
+        artwork: [{ src: "icons/icon-512.png", sizes: "512x512", type: "image/png" }],
+      });
+      navigator.mediaSession.setActionHandler("play", startMusic);
+      navigator.mediaSession.setActionHandler("pause", stopMusic);
+    } catch (e) {}
+  }
 
   // ---------- Input ----------
   el.next.addEventListener("click", () => go(1));
