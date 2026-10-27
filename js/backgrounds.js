@@ -45,7 +45,6 @@ window.BACKGROUNDS = [
   "1532274402911-5a369e4c4bb5", // river landscape
   "1477346611705-65d1883cee1e", // mountain dusk
   "1519046904884-53103b34b206", // shoreline
-  "1504198453319-5ce911bafcde", // lake reflection
   "1473773508845-188df298d2d1", // desert road
   "1476231682828-37e571bc172f", // waterfall cliffs
   "1458668383970-8ddd3927deed", // rocky peaks
